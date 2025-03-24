@@ -122,10 +122,15 @@ jobs:
   nudge-action:
     name: Nudge PR workflows
     runs-on: ubuntu-latest
+    # Comments need to be on their own lines in YAML
+    # Only run when:
+    # 1. It's a PR comment
+    # 2. Comment starts with /nudge
+    # 3. Comment is not from the bot
     if: |
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/nudge') &&
-      github.event.comment.user.login != 'opentelemetrybot'    # Ignore bot's own comments
+      github.event.comment.user.login != 'opentelemetrybot'
     permissions:
       contents: write
       pull-requests: write
