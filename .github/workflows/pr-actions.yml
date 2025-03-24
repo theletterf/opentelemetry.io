@@ -119,107 +119,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
 
-  nudge-action:
-    name: Nudge PR workflows
-    runs-on: ubuntu-latest
-    # Comments need to be on their own lines in YAML
-    # Only run when:
-    # 1. It's a PR comment
-    # 2. Comment starts with /nudge
-    # 3. Comment is not from the bot
-    if: |
-      github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/nudge') &&
-      github.event.comment.user.login != 'opentelemetrybot'
-    permissions:
-      contents: write
-      pull-requests: write
-      actions: write
-
+  rerun_pr_tests:
+    name: rerun_pr_tests
+    if: ${{ github.event.issue.pull_request }}
+    runs-on: ubuntu-20.04
     steps:
-      - name: Context info
-        run: |
-          echo "PR Number: $PR_NUM"
-          echo "Comment: $COMMENT"
-
-      - uses: actions/checkout@v4
-
-      - name: Write start comment
-        run: |
-          gh pr comment $PR_NUM -b "You triggered /nudge action to restart PR workflows at $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-        env:
-          GH_TOKEN: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
-
-      - name: Rerun failed workflows
-        run: |
-          # Get the PR's latest commit SHA
-          SHA=$(gh pr view $PR_NUM --json headRefOid -q .headRefOid)
-          echo "Latest commit SHA: $SHA"
-          
-          # Get failed workflow runs
-          WORKFLOW_RUNS=$(gh run list --branch $(gh pr view $PR_NUM --json headRefName -q .headRefName) \
-            --limit 20 \
-            --json status,databaseId,name,conclusion,workflow_id \
-            --jq '.[] | 
-              select(.conclusion == "failure" or 
-                     .conclusion == "cancelled" or 
-                     .conclusion == "timed_out") | 
-              {id: .databaseId, name: .name, conclusion: .conclusion, workflow_id: .workflow_id}')
-
-          if [ -z "$WORKFLOW_RUNS" ]; then
-            echo "No failed workflows found to rerun"
-            exit 0
-          fi
-
-          echo "Found failed workflow runs:"
-          echo "$WORKFLOW_RUNS" | jq -r '. | "- \(.name) (ID: \(.id), Status: \(.conclusion), Workflow ID: \(.workflow_id))"'
-          
-          # Rerun workflows
-          echo "$WORKFLOW_RUNS" | jq -r '.id' | while read -r run_id; do
-            workflow_id=$(echo "$WORKFLOW_RUNS" | jq -r "select(.id==$run_id) | .workflow_id")
-            workflow_name=$(echo "$WORKFLOW_RUNS" | jq -r "select(.id==$run_id) | .name")
-            echo "Attempting to rerun workflow: $workflow_name (ID: $run_id)"
-            
-            # Trigger the rerun
-            RESPONSE=$(gh api --method POST \
-              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/rerun" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              --silent)
-            
-            if [ $? -eq 0 ]; then
-              echo "Rerun triggered successfully for $workflow_name"
-              
-              # Wait briefly and verify the specific workflow was rerun
-              sleep 2
-              NEW_RUNS=$(gh run list --workflow $workflow_id --limit 1 \
-                --json databaseId,name,status,url \
-                --jq 'select(.[0].databaseId != '$run_id') | .[0]')
-              
-              if [ -n "$NEW_RUNS" ]; then
-                echo "Verified new run for $workflow_name:"
-                echo "$NEW_RUNS" | jq '.'
-              else
-                echo "Warning: Could not verify new run for $workflow_name"
-              fi
-            else
-              echo "Failed to rerun $workflow_name"
-              echo "API Response: $RESPONSE"
-            fi
-          done
-        env:
-          GH_TOKEN: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-
-      - name: Report status
-        if: always()
-        run: |
-          gh pr comment $PR_NUM --body "$(cat <<EOF
-          \`/nudge\` action attempted to rerun workflows.
-          - See detailed results in the [workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
-          - If reruns failed, you may need to manually restart the workflows
-          - Please check if the bot has sufficient permissions
-          EOF
-          )"
-        env:
-          GH_TOKEN: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
+    - uses: estroz/rerun-actions@main
+      with:
+        repo_token: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
+        comment_id: ${{ github.event.comment.id }}
