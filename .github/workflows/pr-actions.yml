@@ -174,45 +174,52 @@ jobs:
           echo "Found failed workflow runs:"
           echo "$WORKFLOW_RUNS" | jq -r '. | "- \(.name) (ID: \(.id), Status: \(.conclusion))"'
           
-          # Rerun workflows and verify
+          # Rerun workflows with detailed error reporting
           echo "$WORKFLOW_RUNS" | jq -r .id | while read -r run_id; do
             echo "Attempting to rerun workflow ID: $run_id"
             
-            # Use the REST API directly through gh api
-            gh api --method POST \
+            # Debug: Check workflow run details
+            echo "Checking workflow run details:"
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.workflow_id, .status, .conclusion' || {
+              echo "Failed to get workflow details"
+            }
+            
+            # Try to rerun with verbose output
+            RESPONSE=$(gh api --method POST \
               "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/rerun" \
-              --silent || {
-                echo "Failed to trigger rerun for workflow $run_id"
-                continue
-              }
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              --silent || echo "API call failed")
             
-            # Verify the rerun was triggered by checking new run exists
-            sleep 5  # Give GitHub a moment to create the new run
-            
-            NEW_RUN=$(gh run list --limit 5 --json databaseId,name,status \
-              --jq ".[] | select(.status == \"in_progress\" or .status == \"queued\")" | \
-              grep -v "$GITHUB_RUN_ID")  # Exclude current workflow
-            
-            if [ -n "$NEW_RUN" ]; then
-              echo "Successfully verified new run created for workflow $run_id:"
-              echo "$NEW_RUN" | jq -r '.'
+            if [ $? -eq 0 ]; then
+              echo "Rerun triggered successfully for workflow $run_id"
+              
+              # Verify the rerun
+              sleep 2
+              echo "Checking for new runs:"
+              gh run list --limit 3 --json databaseId,name,status,url \
+                --jq '.[] | select(.status == "queued" or .status == "in_progress")'
             else
-              echo "WARNING: Could not verify new run for workflow $run_id"
+              echo "Failed to rerun workflow $run_id"
+              echo "API Response: $RESPONSE"
+              
+              # Try alternative rerun method
+              echo "Attempting alternative rerun method..."
+              gh run rerun $run_id || echo "Alternative method also failed"
             fi
           done
         env:
           GH_TOKEN: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
 
       - name: Report status
         if: always()
         run: |
           gh pr comment $PR_NUM --body "$(cat <<EOF
-          \`/nudge\` action completed.
-          - Attempted to rerun failed, cancelled, or timed-out workflows
-          - Please check the [workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) for details
-          - If workflows didn't restart, you may need to manually rerun them or check repository permissions
+          \`/nudge\` action attempted to rerun workflows.
+          - See detailed results in the [workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
+          - If reruns failed, you may need to manually restart the workflows
+          - Please check if the bot has sufficient permissions
           EOF
           )"
         env:
