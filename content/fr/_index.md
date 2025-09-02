@@ -44,7 +44,7 @@ default_lang_commit: c0a5eea5d720b0e075efa87f99dcf58c89106268
 
 OpenTelemetry met à votre disposition un ensemble d'APIs, de SDKs et d'outils
 vous permettant d'instrumenter, de générer, de collecter et d'exporter des
-métriques, des logs et des traces (les "données de télémétrie") pour analyser la
+métriques, des logs et des tracedds (les "données de télémétrie") pour analyser la
 performance et le comportement de vos logiciels.
 
 > OpenTelemetry [supporte](/status/) de nombreux [langages](docs/languages/) et
