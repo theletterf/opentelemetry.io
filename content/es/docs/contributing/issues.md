@@ -13,8 +13,8 @@ drifted_from_default: true
 ## Solucionando una propuesta existente
 
 Una de las mejores maneras de contribuir a mejorar la documentación de
-OpenTelemetry (OTel) es solucionando un problema ya identificado.
-
+OpenTelemetry (OTel) es solucionando un problema ya identificado.dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+sds
 1. Navegar por la lista de [propuestas]({{% param _issues %}}).
 2. Seleccione una propuesta en el que le gustaría trabajar, idealmente una que
    se pueda solucionar en poco tiempo.

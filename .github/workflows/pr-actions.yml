@@ -166,3 +166,13 @@ jobs:
           gh pr comment $PR_NUM --body "ℹ️ \`fix:${{ needs.generate-patch.outputs.action_name }}\` made no changes – nothing to commit."
         env:
           GH_TOKEN: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
+
+  rerun_pr_tests:
+    name: rerun_pr_tests
+    if: ${{ github.event.issue.pull_request }}
+    runs-on: ubuntu-20.04
+    steps:
+    - uses: estroz/rerun-actions@main
+      with:
+        repo_token: ${{ secrets.OPENTELEMETRYBOT_GITHUB_TOKEN }}
+        comment_id: ${{ github.event.comment.id }}
